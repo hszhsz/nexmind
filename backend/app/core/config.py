@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-3-sonnet-20240229"
     
     # 搜索引擎配置
-    search_engine: str = "duckduckgo"  # duckduckgo, tavily, brave
+    search_engine: str = "tavily"  # duckduckgo, tavily, brave
     tavily_api_key: Optional[str] = None
     brave_api_key: Optional[str] = None
     
