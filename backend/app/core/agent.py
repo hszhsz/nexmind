@@ -156,9 +156,20 @@ class CompanyAnalysisAgent:
             search_queries = self._generate_search_queries(state["query"], state["plan"])
             
             all_results = []
-            for query in search_queries:
-                results = await self.search_tool.search(query)
-                all_results.extend(results)
+            # 限制并发搜索，避免过多请求
+            for query in search_queries[:4]:  # 最多4个查询
+                try:
+                    results = await asyncio.wait_for(
+                        self.search_tool.search(query, max_results=3),  # 每个查询最多3个结果
+                        timeout=30  # 每个搜索30秒超时
+                    )
+                    all_results.extend(results)
+                except asyncio.TimeoutError:
+                    logger.warning(f"搜索查询超时: {query}")
+                    continue
+                except Exception as e:
+                    logger.error(f"搜索查询失败: {query}, 错误: {e}")
+                    continue
             
             state["search_results"] = all_results
             state["messages"].append(AIMessage(content=f"已收集到{len(all_results)}条相关信息"))
@@ -229,11 +240,10 @@ class CompanyAnalysisAgent:
                     f"{company_name} 财务报表",
                     f"{company_name} 年报",
                     f"{company_name} 行业地位",
-                    f"{company_name} 竞争对手",
-                    f"{company_name} 投资价值"
+                    f"{company_name} 竞争对手"
                 ])
         
-        return queries[:5]  # 限制查询数量
+        return queries[:4]  # 限制查询数量为4个
     
     def _extract_company_name(self, query: str) -> Optional[str]:
         """从查询中提取公司名称"""

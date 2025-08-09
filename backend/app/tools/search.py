@@ -19,7 +19,7 @@ class SearchTool:
         """获取HTTP会话"""
         if self.session is None:
             self.session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=30)
+                timeout=aiohttp.ClientTimeout(total=60, connect=10)
             )
         return self.session
     

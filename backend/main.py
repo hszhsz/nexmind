@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 import os
 import json
+import asyncio
 
 # 导入AI Agent
 from app.core.agent import CompanyAnalysisAgent
@@ -94,10 +95,23 @@ async def chat_endpoint(request: ChatRequest):
         
         # 调用AI Agent处理查询
         logger.info(f"处理用户查询: {request.message}")
-        result = await agent.process_query(
-            query=request.message,
-            conversation_id=request.conversation_id or "default"
-        )
+        
+        # 添加超时控制
+        try:
+            result = await asyncio.wait_for(
+                agent.process_query(
+                    query=request.message,
+                    conversation_id=request.conversation_id or "default"
+                ),
+                timeout=300  # 5分钟超时
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"查询处理超时: {request.message}")
+            return ChatResponse(
+                response="抱歉，您的查询处理时间过长，请尝试简化查询或稍后重试。",
+                conversation_id=request.conversation_id or "default",
+                timestamp=datetime.now().isoformat()
+            )
         
         return ChatResponse(
             response=result["content"],
