@@ -54,52 +54,100 @@ export default function Home() {
     scrollActionsToBottom()
   }, [agentActions])
 
-  const simulateAgentActions = (query: string) => {
+  const handleAgentStream = async (query: string) => {
     setShowAgentPanel(true)
     setAgentActions([])
     
-    const actions = [
-      {
-        type: 'search' as const,
-        title: '搜索企业信息',
-        description: `正在搜索"${query}"的相关企业数据...`,
-        status: 'pending' as const
-      },
-      {
-        type: 'analyze' as const,
-        title: '数据分析',
-        description: '分析企业财务数据、市场表现和行业地位...',
-        status: 'pending' as const
-      },
-      {
-        type: 'generate' as const,
-        title: '生成报告',
-        description: '基于分析结果生成comprehensive企业分析报告...',
-        status: 'pending' as const
+    try {
+      const response = await fetch('http://localhost:8000/api/chat/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: query,
+          conversation_id: 'default'
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Stream request failed')
       }
-    ]
 
-    actions.forEach((action, index) => {
-      setTimeout(() => {
-        const newAction: AgentAction = {
-          ...action,
-          id: `action-${Date.now()}-${index}`,
-          timestamp: new Date(),
-          status: 'running'
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) {
+        throw new Error('No reader available')
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        console.log('Received chunk:', chunk) // 调试日志
+        const lines = chunk.split('\n')
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const jsonStr = line.slice(6).trim()
+              console.log('Parsing JSON:', jsonStr) // 调试日志
+              const data = JSON.parse(jsonStr)
+              console.log('Parsed data:', data) // 调试日志
+              
+              if (data.type === 'step') {
+                const newAction: AgentAction = {
+                  id: `action-${Date.now()}-${Math.random()}`,
+                  type: data.step_name.includes('搜索') ? 'search' : 
+                        data.step_name.includes('分析') ? 'analyze' : 
+                        data.step_name.includes('报告') ? 'generate' : 'complete',
+                  title: data.step_name,
+                  description: data.description,
+                  status: data.status === 'running' ? 'running' : 
+                          data.status === 'completed' ? 'completed' : 'pending',
+                  timestamp: new Date(data.timestamp)
+                }
+                
+                setAgentActions(prev => {
+                  const existingIndex = prev.findIndex(a => a.title === newAction.title)
+                  if (existingIndex >= 0) {
+                    // 更新现有动作
+                    const updated = [...prev]
+                    updated[existingIndex] = { ...updated[existingIndex], ...newAction }
+                    return updated
+                  } else {
+                    // 添加新动作
+                    return [...prev, newAction]
+                  }
+                })
+              } else if (data.type === 'final') {
+                // 处理最终响应
+                return data.response
+              } else if (data.type === 'error') {
+                console.error('Agent error:', data.message)
+                throw new Error(data.message)
+              }
+            } catch (e) {
+              console.error('Error parsing stream data:', e)
+            }
+          }
         }
-        setAgentActions(prev => [...prev, newAction])
-
-        setTimeout(() => {
-          setAgentActions(prev => 
-            prev.map(a => 
-              a.id === newAction.id 
-                ? { ...a, status: 'completed' as const, duration: Math.floor(Math.random() * 3000) + 1000 }
-                : a
-            )
-          )
-        }, Math.random() * 2000 + 1000)
-      }, index * 800)
-    })
+      }
+    } catch (error) {
+      console.error('Error in agent stream:', error)
+      // 添加错误状态的动作
+      setAgentActions(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        type: 'complete',
+        title: '处理错误',
+        description: '处理过程中发生错误，请重试',
+        status: 'error',
+        timestamp: new Date()
+      }])
+      throw error
+    }
   }
 
   const handleSendMessage = async () => {
@@ -117,8 +165,6 @@ export default function Home() {
     setInputValue('')
     setIsLoading(true)
 
-    simulateAgentActions(currentQuery)
-
     const loadingMessage: Message = {
       id: (Date.now() + 1).toString(),
       type: 'bot',
@@ -129,20 +175,37 @@ export default function Home() {
     setMessages(prev => [...prev, loadingMessage])
 
     try {
-      const response = await axios.post('/api/chat', {
-        message: currentQuery,
-        conversation_id: 'default'
-      })
+      // 使用流式处理获取Agent执行步骤和最终响应
+      const finalResponse = await handleAgentStream(currentQuery)
+      
+      // 如果有最终响应，更新消息
+      if (finalResponse) {
+        setMessages(prev => {
+          const filtered = prev.filter(msg => !msg.isLoading)
+          return [...filtered, {
+            id: (Date.now() + 2).toString(),
+            type: 'bot',
+            content: finalResponse,
+            timestamp: new Date()
+          }]
+        })
+      } else {
+        // 如果没有最终响应，使用传统API
+        const response = await axios.post('http://localhost:8000/api/chat', {
+          message: currentQuery,
+          conversation_id: 'default'
+        })
 
-      setMessages(prev => {
-        const filtered = prev.filter(msg => !msg.isLoading)
-        return [...filtered, {
-          id: (Date.now() + 2).toString(),
-          type: 'bot',
-          content: response.data.response || '抱歉，我暂时无法处理您的请求。请稍后再试。',
-          timestamp: new Date()
-        }]
-      })
+        setMessages(prev => {
+          const filtered = prev.filter(msg => !msg.isLoading)
+          return [...filtered, {
+            id: (Date.now() + 2).toString(),
+            type: 'bot',
+            content: response.data.response || '抱歉，我暂时无法处理您的请求。请稍后再试。',
+            timestamp: new Date()
+          }]
+        })
+      }
     } catch (error) {
       console.error('Error sending message:', error)
       setMessages(prev => {

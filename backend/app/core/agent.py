@@ -320,3 +320,145 @@ class CompanyAnalysisAgent:
                     "error": str(e)
                 }
             }
+    
+    async def process_query_stream(
+        self, 
+        query: str, 
+        conversation_id: str = "default",
+        user_id: Optional[str] = None
+    ):
+        """流式处理用户查询，实时返回执行步骤"""
+        logger.info(f"开始流式处理查询: {query}")
+        
+        try:
+            # 步骤1: 制定计划
+            yield {
+                "type": "step",
+                "step_name": "制定分析计划",
+                "description": "正在制定企业分析计划...",
+                "status": "running",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # 模拟计划制定
+            await asyncio.sleep(1)
+            plan = [
+                "收集公司基本信息",
+                "分析财务数据", 
+                "评估市场地位",
+                "生成分析报告"
+            ]
+            
+            yield {
+                "type": "step",
+                "step_name": "制定分析计划",
+                "description": f"分析计划已制定，包含{len(plan)}个步骤",
+                "status": "completed",
+                "timestamp": datetime.now().isoformat(),
+                "data": {"plan": plan}
+            }
+            
+            # 步骤2: 搜索信息
+            yield {
+                "type": "step",
+                "step_name": "搜索企业信息",
+                "description": "正在搜索相关企业数据...",
+                "status": "running",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # 执行实际搜索
+            search_queries = self._generate_search_queries(query, plan)
+            all_results = []
+            
+            for i, search_query in enumerate(search_queries[:3]):
+                try:
+                    results = await asyncio.wait_for(
+                        self.search_tool.search(search_query, max_results=2),
+                        timeout=20
+                    )
+                    all_results.extend(results)
+                    
+                    yield {
+                        "type": "step",
+                        "step_name": "搜索企业信息",
+                        "description": f"已完成第{i+1}个搜索查询，找到{len(results)}条结果",
+                        "status": "running",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                except Exception as e:
+                    logger.error(f"搜索失败: {e}")
+                    continue
+            
+            yield {
+                "type": "step",
+                "step_name": "搜索企业信息",
+                "description": f"信息搜索完成，共收集到{len(all_results)}条相关数据",
+                "status": "completed",
+                "timestamp": datetime.now().isoformat(),
+                "data": {"results_count": len(all_results)}
+            }
+            
+            # 步骤3: 数据分析
+            yield {
+                "type": "step",
+                "step_name": "数据分析",
+                "description": "正在分析企业数据...",
+                "status": "running",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # 执行实际分析
+            analysis_result = await self.analysis_tool.analyze(
+                query=query,
+                search_results=all_results,
+                plan=plan
+            )
+            
+            yield {
+                "type": "step",
+                "step_name": "数据分析",
+                "description": "企业数据分析完成",
+                "status": "completed",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # 步骤4: 生成报告
+            yield {
+                "type": "step",
+                "step_name": "生成报告",
+                "description": "正在生成分析报告...",
+                "status": "running",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # 执行实际报告生成
+            final_report = await self.report_generator.generate_report(
+                query=query,
+                search_results=all_results,
+                analysis_data=analysis_result
+            )
+            
+            yield {
+                "type": "step",
+                "step_name": "生成报告",
+                "description": "分析报告生成完成",
+                "status": "completed",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # 最终结果
+            yield {
+                "type": "final",
+                "response": final_report,
+                "conversation_id": conversation_id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"流式处理查询时发生错误: {e}")
+            yield {
+                "type": "error",
+                "message": f"处理查询时发生错误: {str(e)}",
+                "timestamp": datetime.now().isoformat()
+            }

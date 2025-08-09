@@ -48,7 +48,7 @@ except Exception as e:
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -111,6 +111,14 @@ class ChatResponse(BaseModel):
     response: str
     conversation_id: str
     timestamp: str
+
+class AgentStepResponse(BaseModel):
+    type: str  # 'step' or 'final'
+    step_name: str
+    description: str
+    status: str  # 'running', 'completed', 'error'
+    timestamp: str
+    data: Optional[Dict[str, Any]] = None
 
 @app.get("/")
 async def root():
@@ -183,6 +191,46 @@ async def chat_endpoint(request: ChatRequest):
             conversation_id=request.conversation_id or "default",
             timestamp=datetime.now().isoformat()
         )
+
+@app.post("/api/chat/stream")
+async def chat_stream_endpoint(request: ChatRequest):
+    """流式聊天API端点"""
+    async def generate_response():
+        try:
+            # 检查AI Agent是否可用
+            if agent is None:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'AI服务暂时不可用'}, ensure_ascii=False)}\n\n"
+                return
+            
+            # 验证用户输入
+            if not is_company_related_query(request.message):
+                yield f"data: {json.dumps({'type': 'final', 'response': '您好！我是NexMind企业分析助手，专门为您提供公司和企业相关的分析服务。请输入想要分析的公司名称或相关问题。'}, ensure_ascii=False)}\n\n"
+                return
+            
+            # 发送开始信号
+            description = f'正在分析"{request.message}"...'
+            yield f"data: {json.dumps({'type': 'step', 'step_name': '开始分析', 'description': description, 'status': 'running', 'timestamp': datetime.now().isoformat()}, ensure_ascii=False)}\n\n"
+            
+            # 调用Agent处理查询并流式返回步骤
+            async for step_data in agent.process_query_stream(
+                query=request.message,
+                conversation_id=request.conversation_id or "default"
+            ):
+                yield f"data: {json.dumps(step_data, ensure_ascii=False)}\n\n"
+                
+        except Exception as e:
+            logger.error(f"流式处理聊天请求时发生错误: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': f'处理请求时发生错误: {str(e)}'}, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        generate_response(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream"
+        }
+    )
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
