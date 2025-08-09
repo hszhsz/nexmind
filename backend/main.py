@@ -9,6 +9,7 @@ from datetime import datetime
 import os
 import json
 import asyncio
+import re
 
 # 导入AI Agent
 from app.core.agent import CompanyAnalysisAgent
@@ -53,6 +54,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 输入验证函数
+def is_company_related_query(message: str) -> bool:
+    """
+    判断用户输入是否与公司分析相关
+    """
+    # 转换为小写进行匹配
+    message_lower = message.lower().strip()
+    
+    # 简单的问候语和无关内容
+    greetings = [
+        "你好", "hello", "hi", "嗨", "您好", "早上好", "下午好", "晚上好",
+        "谢谢", "thank you", "thanks", "再见", "bye", "goodbye"
+    ]
+    
+    # 如果是简单问候语，返回False
+    if message_lower in greetings:
+        return False
+    
+    # 公司相关关键词
+    company_keywords = [
+        "公司", "企业", "集团", "股份", "有限公司", "corporation", "company", "inc",
+        "分析", "财务", "营收", "利润", "股价", "市值", "业务", "产品", "服务",
+        "竞争", "市场", "行业", "投资", "风险", "发展", "战略", "管理",
+        "腾讯", "阿里巴巴", "百度", "字节跳动", "美团", "京东", "小米", "华为",
+        "苹果", "微软", "谷歌", "亚马逊", "特斯拉", "meta", "netflix"
+    ]
+    
+    # 检查是否包含公司相关关键词
+    for keyword in company_keywords:
+        if keyword in message_lower:
+            return True
+    
+    # 检查是否包含公司名称模式（如：XX公司、XX集团等）
+    company_patterns = [
+        r'\w+公司',
+        r'\w+集团', 
+        r'\w+企业',
+        r'\w+股份',
+        r'\w+科技',
+        r'\w+控股'
+    ]
+    
+    for pattern in company_patterns:
+        if re.search(pattern, message):
+            return True
+    
+    return False
+
 # 请求和响应模型
 class ChatRequest(BaseModel):
     message: str
@@ -89,6 +138,14 @@ async def chat_endpoint(request: ChatRequest):
         if agent is None:
             return ChatResponse(
                 response="抱歉，AI服务暂时不可用。请检查API密钥配置或稍后重试。",
+                conversation_id=request.conversation_id or "default",
+                timestamp=datetime.now().isoformat()
+            )
+        
+        # 验证用户输入是否与公司分析相关
+        if not is_company_related_query(request.message):
+            return ChatResponse(
+                response="您好！我是NexMind企业分析助手，专门为您提供公司和企业相关的分析服务。\n\n请您输入想要分析的公司名称或相关问题，例如：\n• 帮我分析一下腾讯公司\n• 阿里巴巴的财务状况如何\n• 比较苹果和微软的竞争优势\n\n如果您确实需要进行企业分析，请重新输入您的问题。",
                 conversation_id=request.conversation_id or "default",
                 timestamp=datetime.now().isoformat()
             )
