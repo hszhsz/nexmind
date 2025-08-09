@@ -28,6 +28,10 @@ wheels/
 .installed.cfg
 *.egg
 
+# UV Python package manager
+.venv/
+.uv-cache/
+
 # IDE
 .vscode/
 .idea/

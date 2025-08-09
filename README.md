@@ -29,9 +29,23 @@
 
 ### 环境要求
 
-- Python 3.8+
+- Python 3.9+
 - Node.js 18+
 - npm 或 yarn
+- uv (Python包管理器)
+
+### 安装uv
+
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# 或使用pip
+pip install uv
+```
 
 ### 安装步骤
 
@@ -44,7 +58,7 @@
 2. **后端设置**
    ```bash
    cd backend
-   pip install -r requirements.txt
+   uv sync
    cp .env.example .env
    ```
 
@@ -74,7 +88,7 @@
    **启动后端** (在 `backend` 目录):
    ```bash
    mkdir -p logs
-   python3 main.py
+   uv run python main.py
    ```
    
    **启动前端** (在 `frontend` 目录):
@@ -100,7 +114,7 @@ nexmind/
 │   │       ├── analysis.py # 分析工具
 │   │       └── report.py   # 报告生成
 │   ├── main.py             # 应用入口
-│   ├── requirements.txt    # Python依赖
+│   ├── pyproject.toml      # Python依赖和项目配置
 │   └── .env.example        # 环境变量模板
 ├── frontend/               # 前端应用
 │   ├── app/
