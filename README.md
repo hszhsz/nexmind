@@ -96,7 +96,31 @@ pip install uv
    npm run dev
    ```
 
-6. **访问应用**
+6. **启动应用**
+   
+   **方法一: 使用启动脚本 (推荐)**
+   ```bash
+   # macOS/Linux
+   ./start.sh
+   
+   # Windows
+   start.bat
+   ```
+   
+   **方法二: 手动启动**
+   
+   分别在两个终端中运行：
+   ```bash
+   # 终端1 - 启动后端
+   cd backend
+   uv run python main.py
+   
+   # 终端2 - 启动前端
+   cd frontend
+   npm run dev
+   ```
+
+7. **访问应用**
    
    打开浏览器访问: http://localhost:3000
 
@@ -123,6 +147,8 @@ nexmind/
 │   │   └── globals.css     # 全局样式
 │   ├── package.json        # Node.js依赖
 │   └── next.config.js      # Next.js配置
+├── start.sh                # 启动脚本 (macOS/Linux)
+├── start.bat               # 启动脚本 (Windows)
 └── docker-compose.yml      # Docker编排
 ```
 
